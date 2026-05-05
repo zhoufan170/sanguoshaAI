@@ -1,0 +1,118 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: "Microsoft YaHei", "SimHei", sans-serif;
+  background: #1a1a2e; color: #e0e0e0; height: 100vh; overflow: hidden;
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+header {
+  background: #16213e; padding: 10px 20px;
+  display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+  border-bottom: 2px solid #0f3460;
+}
+header h1 { font-size: 20px; color: #e94560; white-space: nowrap; }
+#controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#controls button {
+  padding: 6px 16px; border: none; border-radius: 4px;
+  cursor: pointer; font-size: 14px; font-family: inherit;
+}
+#btn-start { background: #e94560; color: #fff; }
+#btn-start:hover { background: #c73a52; }
+#btn-step { background: #0f3460; color: #e0e0e0; }
+#btn-step:hover { background: #1a4a7a; }
+#btn-step:disabled { opacity: 0.4; cursor: not-allowed; }
+.toggle { font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.toggle input { cursor: pointer; }
+#status { font-size: 13px; color: #aaa; margin-left: auto; }
+
+main { display: flex; flex: 1; overflow: hidden; }
+
+#player-panel {
+  width: 320px; flex-shrink: 0; overflow-y: auto;
+  background: #16213e; border-right: 1px solid #0f3460;
+}
+#players { padding: 8px; }
+
+.player-card {
+  background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px;
+  padding: 8px 10px; margin-bottom: 6px; position: relative;
+  transition: border-color 0.3s;
+}
+.player-card.active { border-color: #e94560; box-shadow: 0 0 8px rgba(233,69,96,0.3); }
+.player-card.dead { opacity: 0.45; }
+.player-card .p-header { display: flex; justify-content: space-between; align-items: center; }
+.player-card .p-name { font-weight: bold; font-size: 15px; }
+.player-card .p-kingdom { font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+.kingdom-魏 { background: #2563eb; color: #fff; }
+.kingdom-蜀 { background: #dc2626; color: #fff; }
+.kingdom-吴 { background: #16a34a; color: #fff; }
+.kingdom-群 { background: #a855f7; color: #fff; }
+
+.player-card .p-hp { display: flex; align-items: center; gap: 4px; margin: 4px 0; }
+.p-hp-bar {
+  flex: 1; height: 8px; background: #333; border-radius: 4px; overflow: hidden;
+}
+.p-hp-fill { height: 100%; background: #22c55e; border-radius: 4px; transition: width 0.5s; }
+.p-hp-fill.low { background: #ef4444; }
+.p-hp-fill.mid { background: #f59e0b; }
+.p-hp-text { font-size: 12px; white-space: nowrap; min-width: 45px; text-align: right; }
+
+.player-card .p-role {
+  font-size: 11px; padding: 1px 6px; border-radius: 3px; display: inline-block;
+}
+.role-主公 { background: #e94560; color: #fff; }
+.role-忠臣 { background: #2563eb; color: #fff; }
+.role-反贼 { background: #dc2626; color: #fff; }
+.role-内奸 { background: #a855f7; color: #fff; }
+.role-未知 { background: #555; color: #ccc; }
+
+.player-card .p-section { margin-top: 4px; }
+.player-card .p-label { font-size: 10px; color: #888; margin-right: 4px; }
+.player-card .p-cards { display: flex; flex-wrap: wrap; gap: 3px; }
+.card-tag {
+  font-size: 11px; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+  background: #333; color: #ddd;
+}
+.card-tag.suit-♠, .card-tag.suit-♣ { background: #222; }
+.card-tag.suit-♥, .card-tag.suit-♦ { background: #3b1111; color: #fca5a5; }
+
+.player-card .p-skills { font-size: 10px; color: #888; }
+
+#log-panel {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+#turn-info {
+  padding: 8px 16px; background: #0f3460; font-size: 14px;
+  font-weight: bold; flex-shrink: 0;
+}
+#event-log {
+  flex: 1; overflow-y: auto; padding: 8px 16px;
+  font-size: 13px; line-height: 1.6;
+}
+.log-event { padding: 2px 0; border-bottom: 1px solid #222; }
+.log-thinking {
+  padding: 4px 8px; margin: 2px 0; background: #1a2744;
+  border-left: 3px solid #e94560; font-size: 12px; color: #aac;
+}
+.log-suspicion {
+  padding: 4px 8px; margin: 2px 0; background: #2a1a3e;
+  border-left: 3px solid #a855f7; font-size: 12px; color: #d4bfff;
+}
+.log-turn {
+  padding: 4px 8px; margin: 4px 0; background: #0f3460;
+  border-radius: 4px; font-weight: bold; font-size: 13px; color: #e94560;
+}
+.log-status { color: #f59e0b; font-style: italic; }
+.log-action {
+  padding: 3px 8px; margin: 2px 0; background: #1a3a1a;
+  border-left: 3px solid #22c55e; font-size: 13px; color: #bbf7d0;
+}
+.log-gameover {
+  padding: 8px; text-align: center; font-size: 18px;
+  color: #e94560; font-weight: bold;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #1a1a2e; }
+::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
