@@ -1,0 +1,5 @@
+run.ps1
+__pycache__/
+*.pyc
+*.log
+_test_*.log
