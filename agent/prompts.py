@@ -476,7 +476,7 @@ NEGATE_PROMPT = """## 无懈可击响应
 
 {source_name}使用了【{card_name}】{target_info}。
 
-你可以打出【无懈可击】来抵消此牌的效果。
+你可以打出【无懈可击】来抵消对{target_name}的此牌效果。
 
 ### 你的状态
 - 武将：{hero_name}（{kingdom}）
@@ -484,9 +484,18 @@ NEGATE_PROMPT = """## 无懈可击响应
 - 手牌（{hand_count}张）：{hand_cards}
 - 装备：{equipment}
 - 技能：{skills}
+- 你的身份：{my_role}
 
 ### 场上信息
 {public_info}
+
+### 近期事件
+{recent_events}
+
+### 策略提示
+- 如果你是反贼，南蛮/万箭/五谷对主公方有利时应该无懈
+- 如果你是忠臣，保护主公免受伤害时应该无懈
+- 五谷丰登：无懈可让目标拿不到牌
 
 请决定是否打出【无懈可击】。如果是，输出：
 ```json
@@ -554,7 +563,7 @@ def build_response_prompt(view: dict, response_type: str, source_card: str,
         if "龙胆" in skills_lower:
             hints.append("- 你可以使用【龙胆】将【杀】当【闪】使用")
         if "八卦阵" in equipment and not no_bagua:
-            hints.append("- 【八卦阵】：设置 skill_name=\"八卦阵\" 且 card_name=\"\" 来发动判定。若判定为红色则视为打出【闪】；若为黑色可再用手牌出【闪】")
+            hints.append("- 【八卦阵】：优先尝试！设置skill_name=\"八卦阵\" card_name=\"\"。判定红色=闪避，黑色=可再用手牌出闪")
     elif response_type == "杀":
         if "武圣" in skills_lower:
             hints.append("- 你可以使用【武圣】将一张红色手牌当【杀】使用")
@@ -591,7 +600,11 @@ def build_negate_prompt(view: dict, source_idx: int, card_name: str,
     if target_idx is not None and target_idx != source_idx:
         target_name = view["players"][target_idx]["name"]
         target_info = f"，目标为{target_name}"
+    elif target_idx is not None:
+        target_name = view["players"][target_idx]["name"]
+        target_info = "（目标为自己）"
     else:
+        target_name = "所有角色"
         target_info = ""
 
     hand_cards = ", ".join(
@@ -606,7 +619,9 @@ def build_negate_prompt(view: dict, source_idx: int, card_name: str,
     return NEGATE_PROMPT.format(
         source_name=source_name,
         card_name=card_name,
+        target_name=target_name if target_idx is not None else "所有角色",
         target_info=target_info,
+        my_role=view.get("my_role", "未知"),
         hero_name=view["my_hero"],
         kingdom=view["my_kingdom"],
         hp=view["my_hp"],
@@ -616,7 +631,7 @@ def build_negate_prompt(view: dict, source_idx: int, card_name: str,
         equipment=equipment,
         skills=skills,
         public_info=public_info,
-            recent_events=_format_recent_events(view),
+        recent_events=_format_recent_events(view),
     )
 
 
@@ -646,24 +661,19 @@ DYING_PROMPT = """## 濒死求桃
 - 如果你自己濒死，请务必自救！
 {special_hint}
 
-请决定是否使用【桃】。如果使用，输出：
+请决定是否救援。如果使用【桃】或【急救】，输出：
 ```json
 {{
-  "reasoning": "使用桃的理由（基于身份判断）",
+  "reasoning": "救援理由（基于身份判断）",
   "action": {{
     "type": "respond",
-    "card_name": "桃"
+    "card_name": "桃",
+    "skill_name": ""
   }}
 }}
 ```
-如果不使用，输出：
-```json
-{{
-  "reasoning": "不使用桃的理由",
-  "action": {{
-    "type": "pass"
-  }}
-}}
+如果有【急救】技能，可以用红色牌当桃：card_name填红色牌名，skill_name填"急救"。
+如果不救援，输出：{{"reasoning": "...", "action": {{"type": "pass"}}}}
 ```"""
 
 

@@ -1081,7 +1081,8 @@ class SanguoshaGame:
                         state.players[nxt].delay_cards.append(card)
                         self.log(f"    闪电移至{state.players[nxt].name}")
                 resolved.append(card)
-            elif card.name == "乐不思蜀":
+            elif card.name == "乐不思蜀" or card.type != CardType.DELAY:
+                # 国色等技能可能放非延时锦囊到判定区，统一视为乐不思蜀
                 # 无懈 check first
                 negated = False
                 if self.agent_callback:
