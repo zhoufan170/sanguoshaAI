@@ -250,6 +250,8 @@ def validate_action(state: GameState, action: Action) -> tuple[bool, str]:
 
         # Phase-specific skills - can't be used during play phase
         PHASE_SKILLS = {"洛神", "闭月", "突袭"}
+        if skill_name == "苦肉" and player.hp <= 0:
+            return False, "体力为0或以下，不能发动【苦肉】"
         if skill_name in PHASE_SKILLS:
             return False, f"【{skill_name}】不是出牌阶段技能"
 
@@ -258,6 +260,13 @@ def validate_action(state: GameState, action: Action) -> tuple[bool, str]:
         if skill_name == "离间":
             if "secondary_target" not in action.extra:
                 return False, "【离间】需要指定两名男性角色（extra.secondary_target）"
+            t1 = state.players[action.target_idx] if action.target_idx is not None else None
+            st = action.extra.get("secondary_target")
+            t2 = state.players[st] if st is not None and st < len(state.players) else None
+            if t1 and t1.hero.gender != "male":
+                return False, f"【离间】目标必须是男性，{t1.name}不是"
+            if t2 and t2.hero.gender != "male":
+                return False, f"【离间】目标必须是男性，{t2.name}不是"
         if skill_name in ONCE_PER_TURN:
             if skill_name in state.skills_used_this_turn[action.player_idx]:
                 return False, f"本回合已使用过【{skill_name}】"
@@ -525,8 +534,10 @@ def _resolve_death(state: GameState, dead_idx: int, killer_idx: int, events: lis
     # Discard all cards
     state.discard_pile.extend(player.hand)
     state.discard_pile.extend(player.equipment)
+    state.discard_pile.extend(player.delay_cards)
     player.hand.clear()
     player.equipment.clear()
+    player.delay_cards.clear()
 
     killer = state.players[killer_idx]
     dead_role = player.role
@@ -534,10 +545,9 @@ def _resolve_death(state: GameState, dead_idx: int, killer_idx: int, events: lis
     # Reward/penalty
     if dead_role == Role.REBEL:
         # Killer draws 3 cards
-        for _ in range(3):
-            if state.draw_pile:
-                killer.hand.append(state.draw_pile.pop())
-        events.append(GameEvent(f"{killer.hero.name}击杀反贼，摸三张牌"))
+        drawn = state._draw(killer_idx, 3)
+        if drawn:
+            events.append(GameEvent(f"{killer.hero.name}击杀反贼，摸三张牌: {' '.join(str(c) for c in drawn)}"))
 
     elif dead_role == Role.LOYALIST and killer.role == Role.LORD:
         # Lord kills loyalist: discard all hand and equipment

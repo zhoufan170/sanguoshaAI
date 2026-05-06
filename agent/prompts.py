@@ -49,6 +49,33 @@ GAME_RULES = """
 - 【乐不思蜀】：判定阶段判定，若不为♥，跳过出牌阶段。使用乐不思蜀没有距离限制
 - 【闪电】：判定阶段判定，若为♠2-9，受到3点雷电伤害，否则移至下家。闪电只能先挂在自己身上
 
+### 全武将技能说明
+- 曹操(魏4血)：【奸雄】受到伤害后获得造成伤害的牌 | 主公技【护驾】需要闪时令魏势力角色出闪
+- 司马懿(魏3血)：【反馈】受到伤害后从伤害来源获得一张牌(可选是否发动) | 【鬼才】判定牌生效前可打出手牌替换
+- 夏侯惇(魏4血)：【刚烈】受到伤害后判定，不为♥则伤害来源选受1伤或弃2牌
+- 张辽(魏4血)：【突袭】摸牌阶段放弃摸牌，获得1-2名其他角色各一张手牌
+- 许褚(魏4血)：【裸衣】摸牌阶段少摸1张，本回合杀/决斗伤害+1
+- 郭嘉(魏3血)：【天妒】判定牌生效后获得此牌 | 【遗计】受到伤害后摸2张，可分配至多2张给其他角色
+- 甄姬(魏3血/女)：【洛神】准备阶段判定，黑色获得可重复，红色获得后停 | 【倾国】黑色手牌当闪
+- 刘备(蜀4血)：【仁德】出牌阶段可将任意张手牌给其他角色，≥2张回复1体力 | 主公技【激将】需要杀时令蜀势力出杀
+- 关羽(蜀4血)：【武圣】红色牌当杀
+- 张飞(蜀4血)：【咆哮】杀无次数限制
+- 诸葛亮(蜀3血)：【观星】摸牌阶段看牌堆顶X张(存活人数≤5)，可重排 | 【空城】无手牌时不能被杀/决斗
+- 赵云(蜀4血)：【龙胆】杀当闪、闪当杀
+- 马超(蜀4血)：【马术】计算距离-1 | 【铁骑】使用杀时判定，红色此杀不可闪避
+- 黄忠(蜀4血)：【烈弓】手牌数≥目标或体力≥目标时，杀不可闪避
+- 孙权(吴4血)：【制衡】出牌阶段限一次，弃任意张牌摸等量牌 | 主公技【救援】吴势力救你时额外+1体力
+- 周瑜(吴3血)：【英姿】摸牌阶段多摸1张 | 【反间】出牌阶段限一次，给目标一张牌猜花色，猜错受1伤
+- 甘宁(吴4血)：【奇袭】黑色牌当过河拆桥（可弃装备黑牌，无次数限制）
+- 吕蒙(吴4血)：【克己】未使用过杀可跳过弃牌阶段
+- 黄盖(吴4血)：【苦肉】出牌阶段可多次，弃1牌+失1体力，摸2张
+- 陆逊(吴3血)：【谦逊】不能被顺手牵羊/乐不思蜀 | 【连营】失去最后手牌时摸1张
+- 大乔(吴3血/女)：【国色】♦牌当乐不思蜀 | 【流离】被杀时可弃牌转移给攻击范围内的其他角色
+- 孙尚香(吴3血/女)：【结姻】出牌阶段限一次，弃2手牌与受伤男性各回1体力 | 【枭姬】失去坐骑/武器时摸2张
+- 华佗(群3血)：【青囊】出牌阶段限一次，弃1手牌令一名角色回1体力 | 【急救】回合外红色牌当桃
+- 吕布(群4血)：【无双】使用的杀需2张闪抵消，决斗时对手需连续出2张杀
+- 貂蝉(群3血/女)：【离间】出牌阶段限一次，弃1牌令两名男性决斗 | 【闭月】结束阶段摸1张
+
 ### 距离计算
 基础距离 = 座位间隔（顺时针或逆时针取最小值）
 实际距离 = 基础距离 + 目标+1马 - 你的-1马 - 技能修正
@@ -60,7 +87,7 @@ GAME_RULES = """
 - 内奸：两边平衡，削弱双方，确保主公最后死
 - 注意通过出牌行为推断其他人的身份
 - 主公不要轻易杀忠臣（误杀忠臣会弃光所有牌）
-- **装备牌能装就装**：装备可以持续生效，弃掉浪费。弃牌阶段优先弃基本牌（杀/闪），保留装备和桃。
+- 任何人击杀反贼可摸三张牌。反贼可酌情补刀濒死队友，防止三张牌落入他人之手
 """
 
 SYSTEM_PROMPT = """你是三国杀AI玩家。你必须严格按照JSON格式输出决策。
@@ -81,7 +108,7 @@ SYSTEM_PROMPT = """你是三国杀AI玩家。你必须严格按照JSON格式输�
 
 TURN_PROMPT = """## 当前局面
 
-第{round_number}轮，你是第{player_idx}号位。当前是你的{phase}。
+当前是第{round_number}轮，你是第{player_idx}号位，{phase}。
 
 ### 你的状态
 - 武将：{hero_name}（{kingdom}）
@@ -90,6 +117,7 @@ TURN_PROMPT = """## 当前局面
 - 装备：{equipment}
 - 技能：{skills}
 {sha_limit_info}
+{used_skills_info}
 
 ### 场上公开信息
 {public_info}
@@ -129,6 +157,8 @@ TURN_PROMPT = """## 当前局面
 
 DISCARD_PROMPT = """## 弃牌阶段
 
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
+
 你的手牌数（{hand_count}）超过体力值（{hp}），需要弃置{discard_count}张牌。
 
 ### 你的手牌
@@ -137,12 +167,10 @@ DISCARD_PROMPT = """## 弃牌阶段
 ### 近期事件
 {recent_events}
 
-### 弃牌优先级
-- 优先弃置多余的【杀】（保留1张即可，除非有诸葛连弩/咆哮）
-- 其次弃置低价值锦囊（如借刀杀人、五谷丰登等时机不好的牌）
-- **不要弃装备牌！** 装备可以装到装备栏持续生效，比弃掉划算得多
-- 尽量保留【桃】和【无懈可击】
-- 保留【闪】用于防御
+### 弃牌提示
+- 装备牌可以装备到装备栏持续生效
+- 桃和无懈可击可以后续使用
+- 多余的杀（保留1张即可，诸葛连弩/咆哮除外）可优先弃置
 
 请选择要弃置的牌，输出JSON：
 ```json
@@ -162,7 +190,9 @@ def _format_recent_events(view: dict) -> str:
     events = view.get("recent_events", [])
     if not events:
         return "（游戏开始）"
-    return "\n".join(f"  - {e}" for e in events)
+    rnd = view.get("round_number", 1)
+    active_name = view["players"][view["active_player"]]["name"]
+    return "\n".join(f"  [第{rnd}轮][{active_name}的回合] {e}" for e in events)
 
 
 def _format_public_info(view: dict) -> str:
@@ -271,10 +301,6 @@ def _build_skill_hints(view: dict) -> str:
     used = set(view.get("skills_used_this_turn", []))
     hints = []
 
-    # Show used once-per-turn skills
-    if used:
-        hints.append(f"### 本回合已使用过的技能: {', '.join(used)}")
-
     # Skip phase-specific skills (handled automatically, not play-phase choices)
     phase_skills = {"洛神", "闭月", "英姿", "克己", "马术", "倾国", "龙胆", "武圣",
                     "急救", "谦逊", "空城", "连营", "枭姬", "无双", "铁骑", "烈弓",
@@ -316,7 +342,7 @@ def _build_skill_hints(view: dict) -> str:
                 hints.append(f"【青囊】出牌阶段限一次，弃1张手牌令一名角色回复1点体力")
         elif skill == "离间":
             if hand:
-                hints.append(f"【离间】出牌阶段限一次，弃1张牌(可弃装备)令两名男性角色决斗")
+                hints.append(f"【离间】出牌阶段限一次，弃1张牌(可弃装备)令两名【男性】角色决斗（女性不可）")
         elif skill == "仁德":
             if hand:
                 hints.append(f"【仁德】出牌阶段可将任意张手牌交给其他角色，给出>=2张回复1体力")
@@ -359,6 +385,9 @@ def _build_skill_hints(view: dict) -> str:
             elif cn in ("的卢","绝影","爪黄飞电","赤兔","大宛","紫骍"):
                 tips.append(f"手中{ec['name']}({ec['suit']})可用，建议装备")
     tips.append("反贼可集火忠臣/内奸削减主公帮手，不必死盯主公")
+    # 丈八蛇矛提示
+    if "丈八蛇矛" in view.get("my_equipment", []) and len(hand) >= 2:
+        tips.append(f"【丈八蛇矛】可将2张手牌当【杀】使用，skill_name=\"丈八蛇矛\" card_name=\"杀\" cards_used=[\"牌1\",\"牌2\"]")
     if hints:
         tips.append(hints[0] if hints[0].startswith("###") else "")
         tips.extend(hints)
@@ -407,10 +436,14 @@ def build_turn_prompt(view: dict) -> str:
     else:
         sha_info = f"- 杀限制：本回合已使用{sha_used}/{sha_limit}张杀"
 
+    used = view.get("skills_used_this_turn", [])
+    used_info = f"- ⚠️ 本回合已使用过的技能: {', '.join(used)}" if used else ""
+
     prompt = TURN_PROMPT.format(
         round_number=view["round_number"],
         player_idx=view["player_idx"],
         sha_limit_info=sha_info,
+        used_skills_info=used_info,
         phase=phase_desc,
         hero_name=view["my_hero"],
         kingdom=view["my_kingdom"],
@@ -429,6 +462,8 @@ def build_turn_prompt(view: dict) -> str:
 
 
 RESPOND_PROMPT = """## 响应请求
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 {response_description}
 
@@ -474,9 +509,11 @@ RESPOND_PROMPT = """## 响应请求
 
 NEGATE_PROMPT = """## 无懈可击响应
 
-{source_name}使用了【{card_name}】{target_info}。
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
-你可以打出【无懈可击】来抵消对{target_name}的此牌效果。
+{negate_desc}。
+
+你可以打出【无懈可击】来抵消此效果。
 
 ### 你的状态
 - 武将：{hero_name}（{kingdom}）
@@ -493,9 +530,7 @@ NEGATE_PROMPT = """## 无懈可击响应
 {recent_events}
 
 ### 策略提示
-- 如果你是反贼，南蛮/万箭/五谷对主公方有利时应该无懈
-- 如果你是忠臣，保护主公免受伤害时应该无懈
-- 五谷丰登：无懈可让目标拿不到牌
+{negate_hint}
 
 请决定是否打出【无懈可击】。如果是，输出：
 ```json
@@ -579,6 +614,9 @@ def build_response_prompt(view: dict, response_type: str, source_card: str,
         response_description=desc,
         bagua_failed_hint=bagua_failed_hint,
         my_role=view.get("my_role", "未知"),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
         hero_name=hero_name,
         kingdom=view["my_kingdom"],
         hp=view["my_hp"],
@@ -594,7 +632,7 @@ def build_response_prompt(view: dict, response_type: str, source_card: str,
 
 
 def build_negate_prompt(view: dict, source_idx: int, card_name: str,
-                         target_idx: int | None = None) -> str:
+                         target_idx: int | None = None, **kwargs) -> str:
     """Build prompt for 无懈可击 decision."""
     source_name = view["players"][source_idx]["name"]
     if target_idx is not None and target_idx != source_idx:
@@ -616,12 +654,52 @@ def build_negate_prompt(view: dict, source_idx: int, card_name: str,
 
     public_info = _format_public_info(view)
 
+    # Build strategy hint based on card type
+    if card_name == "无懈可击" and kwargs.get("original_card"):
+        orig = kwargs["original_card"]
+        chain = kwargs.get("chain_count", 0)
+        orig_source = kwargs.get("orig_source_name", "?")
+        orig_target = kwargs.get("orig_target_name", "?")
+        if chain == 0:
+            desc = f"原始锦囊：【{orig}】由{orig_source}使用→目标{orig_target}。{source_name}打出无懈可击试图抵消"
+        else:
+            desc = f"原始锦囊：【{orig}】由{orig_source}使用→目标{orig_target}。{source_name}打出第{chain+1}张无懈可击进行反制"
+        current_status = "已失效" if chain % 2 == 1 else "仍然有效"
+        if chain % 2 == 0:
+            # Even chain = original still valid, one more negate makes it invalid
+            new_status = "失效（原始锦囊被抵消）"
+        else:
+            new_status = "重新生效（原始锦囊恢复）"
+        negate_hint = f"- 原始锦囊：【{orig}】由{orig_source}使用→目标{orig_target}\n- 当前已打出{chain}张无懈，【{orig}】{current_status}\n- 若你打出无懈：总计数{chain+1}张→【{orig}】将{new_status}"
+    elif card_name in ("乐不思蜀", "闪电"):
+        chain = kwargs.get("chain_count", 0)
+        desc = f"{target_name}的【{card_name}】即将判定"
+        current_status = "已失效（跳过）" if chain % 2 == 1 else "仍然有效（将进行判定）"
+        if chain % 2 == 0:
+            new_status = "失效（跳过判定）"
+        else:
+            new_status = "恢复判定"
+        negate_hint = f"- {target_name}的【{card_name}】即将判定\n- 当前已打出{chain}张无懈，{card_name}{current_status}\n- 若你打出无懈：总计数{chain+1}张→{card_name}将{new_status}"
+    elif card_name == "五谷丰登":
+        negate_hint = "- 无懈可击可让目标拿不到牌"
+        desc = f"{source_name}使用了【{card_name}】{target_info}"
+    elif card_name in ("南蛮入侵", "万箭齐发"):
+        negate_hint = "- 无懈可击可使目标不受此牌影响"
+        desc = f"{source_name}使用了【{card_name}】{target_info}"
+    else:
+        negate_hint = "- 无懈可击可抵消此牌效果"
+        desc = f"{source_name}使用了【{card_name}】{target_info}"
+
     return NEGATE_PROMPT.format(
+        negate_desc=desc,
         source_name=source_name,
         card_name=card_name,
         target_name=target_name if target_idx is not None else "所有角色",
         target_info=target_info,
         my_role=view.get("my_role", "未知"),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
         hero_name=view["my_hero"],
         kingdom=view["my_kingdom"],
         hp=view["my_hp"],
@@ -631,11 +709,14 @@ def build_negate_prompt(view: dict, source_idx: int, card_name: str,
         equipment=equipment,
         skills=skills,
         public_info=public_info,
+        negate_hint=negate_hint,
         recent_events=_format_recent_events(view),
     )
 
 
 DYING_PROMPT = """## 濒死求桃
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 {dying_name}（{dying_kingdom}势力，身份{dying_role_hint}）濒死！当前体力{dying_hp}，需要{needed}个【桃】才能救活。
 
@@ -658,7 +739,7 @@ DYING_PROMPT = """## 濒死求桃
 ### 策略提示
 - 如果{dying_name}是你的队友，应该救他
 - 如果是敌人，可以袖手旁观
-- 如果你自己濒死，请务必自救！
+- 如果你自己濒死，认为有人会救你可以不自救，否则务必自救
 {special_hint}
 
 请决定是否救援。如果使用【桃】或【急救】，输出：
@@ -709,6 +790,9 @@ def build_dying_prompt(view: dict, dying_idx: int, needed: int) -> str:
     special_hint = "\n".join(hints) if hints else ""
 
     return DYING_PROMPT.format(
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "濒死"),
         dying_name=dying_name,
         dying_kingdom=dying_kingdom,
         dying_hp=dying_hp,
@@ -743,6 +827,9 @@ def build_discard_prompt(view: dict, discard_count: int) -> str:
         hand_cards=hand_cards,
         player_idx=view["player_idx"],
         recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
 
 
@@ -783,6 +870,8 @@ def build_hero_select_prompt(role: str, options: list[dict]) -> str:
 
 
 GUICAI_PROMPT = """## 鬼才判定替换
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 当前判定为【{context}】。判定牌是：{judgment_card} ({judgment_suit})。
 
@@ -829,15 +918,18 @@ GUICAI_PROMPT = """## 鬼才判定替换
 
 FANJIAN_GUESS_PROMPT = """## 反间猜花色
 
-{source_name}对你发动了【反间】，给了你一张手牌【{card_name}】！
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
-你需要猜测这张牌的花色（♠ ♥ ♣ ♦）。
+{source_name}对你发动了【反间】，给了你一张手牌（你不知道是什么牌）。
+
+你需要猜测这张牌的花色（♠ ♥ ♣ ♦），猜错受到1点伤害。无论猜对猜错，你都可以获得这张牌。
 
 ### 你的状态
 - 武将：{hero_name}（{kingdom}）
 - 体力：{hp}/{max_hp}
 - 手牌（{hand_count}张）：{hand_cards}
 - 装备：{equipment}
+- 身份：{my_role}
 
 ### 场上信息
 {public_info}
@@ -846,9 +938,9 @@ FANJIAN_GUESS_PROMPT = """## 反间猜花色
 {recent_events}
 
 ### 策略提示
-- 如果猜错花色，你将受到1点伤害
-- 可以考虑{source_name}的身份和手牌情况来推断可能给的花色
-- 如果不确定，可以随便选一个
+- 根据{source_name}的身份和手牌情况推断可能给的花色
+- 反贼/内奸可能给废牌，忠臣可能给有用牌
+- 不确定时随机选
 
 请输出JSON选择花色：
 ```json
@@ -872,7 +964,6 @@ def build_fanjian_guess_prompt(view: dict, source_idx: int, card_name: str) -> s
 
     return FANJIAN_GUESS_PROMPT.format(
         source_name=source_name,
-        card_name=card_name,
         hero_name=view["my_hero"],
         kingdom=view["my_kingdom"],
         hp=view["my_hp"],
@@ -880,47 +971,18 @@ def build_fanjian_guess_prompt(view: dict, source_idx: int, card_name: str) -> s
         hand_count=len(view["my_hand"]),
         hand_cards=hand_cards,
         equipment=equipment,
+        my_role=view.get("my_role", "未知"),
         public_info=public_info,
             recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
 
 
-GANGLIE_CHOICE_PROMPT = """## 刚烈抉择
-
-{ganglie_source}对你发动了【刚烈】！判定结果不为♥。
-
-你需要选择：
-- **受到1点伤害**：直接扣减1点体力
-- **弃置2张手牌**：弃置2张手牌（如果手牌不足2张则必须选择受伤）
-
-### 你的状态
-- 武将：{hero_name}（{kingdom}）
-- 体力：{hp}/{max_hp}
-- 手牌（{hand_count}张）：{hand_cards}
-- 装备：{equipment}
-
-### 场上信息
-{public_info}
-
-### 近期事件
-{recent_events}
-
-### 策略提示
-- 如果体力值低但有较多手牌，优先选择弃牌
-- 如果手牌少但体力值充足，可以选择受伤
-- 如果手牌不足2张，只能选择受伤
-
-请输出JSON决定：
-```json
-{{
-  "reasoning": "选择的理由",
-  "ganglie_choice": "damage|discard",
-  "cards_used": ["弃置的牌名1", "弃置的牌名2"]
-}}
-```"""
-
-
 WUGU_PICK_PROMPT = """## 五谷丰登选牌
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 【五谷丰登】亮出了以下牌，轮到你选择一张：
 
@@ -946,23 +1008,29 @@ WUGU_PICK_PROMPT = """## 五谷丰登选牌
 
 GANGLIE_CHOICE_PROMPT = """## 刚烈抉择
 
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
+
 {ganglie_source}对你发动了【刚烈】！判定结果不为♥。
 
 你需要选择：
-- **受到1点伤害**：直接扣减1点体力
-- **弃置2张手牌**：弃置2张手牌（如果手牌不足2张则必须选择受伤）
+- **damage**：受到1点伤害
+- **discard**：弃置2张手牌（手牌不足2张只能选damage）
 
 ### 你的状态
 - 武将：{hero_name}（{kingdom}）
 - 体力：{hp}/{max_hp}
 - 手牌（{hand_count}张）：{hand_cards}
 - 装备：{equipment}
+- 身份：{my_role}
 
 ### 场上信息
 {public_info}
 
 ### 近期事件
 {recent_events}
+
+### 策略提示
+- 血少牌多选弃牌，血多牌少选受伤
 
 请输出JSON决定：
 ```json
@@ -996,41 +1064,15 @@ def build_ganglie_choice_prompt(view: dict, source_idx: int) -> str:
         equipment=equipment,
         public_info=public_info,
             recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
 
 
-DRAW_PHASE_PROMPT = """## 摸牌阶段决策
-
-当前是你的摸牌阶段。你可以选择：
-{skill_options}
-
-### 你的状态
-- 武将：{hero_name}（{kingdom}）
-- 体力：{hp}/{max_hp}
-- 手牌（{hand_count}张）：{hand_cards}
-- 装备：{equipment}
-
-### 场上其他角色
-{target_info}
-
-### 策略提示
-- 突袭可针对1或2名角色，各获得其一张手牌
-- 优先选择可能有【桃】【无懈可击】等关键牌的角色
-- 反贼优先偷主公/忠臣，忠臣优先偷反贼
-- 如果正常摸牌更有利，选择 PASS
-
-请输出JSON：
-```json
-{{
-  "reasoning": "决策理由",
-  "draw_choice": "normal|tuxi|nuoyi",
-  "targets": [目标玩家索引1, 目标玩家索引2]
-}}
-```
-{draw_choice_hint}"""
-
-
 WUGU_PICK_PROMPT = """## 五谷丰登选牌
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
+
 【五谷丰登】亮出了以下牌，轮到你选择一张：
 {revealed_cards}
 
@@ -1039,6 +1081,16 @@ WUGU_PICK_PROMPT = """## 五谷丰登选牌
 - 体力：{hp}/{max_hp}
 - 手牌（{hand_count}张）：{hand_cards}
 - 装备：{equipment}
+- 身份：{my_role}
+
+### 场上信息
+{public_info}
+
+### 近期事件
+{recent_events}
+
+### 策略提示
+- 请根据场上形式，手牌情况，可选卡牌列表和后续选牌顺序谨慎选择
 
 请选一张最有用的牌，输出JSON：
 ```json
@@ -1069,10 +1121,18 @@ def build_wugu_pick_prompt(view: dict, revealed: list[str]) -> str:
         hand_count=len(view["my_hand"]),
         hand_cards=hand_cards,
         equipment=equipment,
+        my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
 
 
 YIJI_DISTRIBUTE_PROMPT = """## 遗计分牌
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 你发动了【遗计】，摸了两张牌。现在你可以将摸到的牌分配给其他角色（只能分刚摸的牌，不能分原本手牌）。
 
@@ -1083,9 +1143,13 @@ YIJI_DISTRIBUTE_PROMPT = """## 遗计分牌
 - 武将：{hero_name}（{kingdom}）
 - 体力：{hp}/{max_hp}
 - 装备：{equipment}
+- 身份：{my_role}
 
-### 其他角色
-{target_info}
+### 场上信息
+{public_info}
+
+### 近期事件
+{recent_events}
 
 ### 策略提示
 - 只能分配上面"遗计摸到的牌"，不能分原本手牌
@@ -1109,6 +1173,8 @@ YIJI_DISTRIBUTE_PROMPT = """## 遗计分牌
 
 
 JIEDAO_PROMPT = """## 借刀杀人
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 {source_name}对你使用了【借刀杀人】！你必须对{secondary_name}使用一张【杀】，否则你的武器会被{source_name}拿走。
 
@@ -1144,6 +1210,27 @@ JIEDAO_PROMPT = """## 借刀杀人
 ```"""
 
 
+def build_guanxing_prompt(view: dict, cards: list[str]) -> str:
+    """Build prompt for 观星 arrangement."""
+    hand_cards = ", ".join(
+        f"{c['name']}({c['suit']})" for c in view["my_hand"]
+    ) if view["my_hand"] else "无"
+    equipment = ", ".join(view["my_equipment"]) if view.get("my_equipment") else "无"
+    cards_str = "\n".join(f"  [{j}] {c}" for j, c in enumerate(cards))
+    return GUANXING_PROMPT.format(
+        count=len(cards), guanxing_cards=cards_str,
+        hero_name=view["my_hero"], kingdom=view["my_kingdom"],
+        hp=view["my_hp"], max_hp=view["my_max_hp"],
+        hand_count=len(view["my_hand"]), hand_cards=hand_cards,
+        equipment=equipment, my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
+    )
+
+
 def build_yiji_distribute_prompt(view: dict, drawn: list[str] = None) -> str:
     """Build prompt for 遗计 card distribution."""
     if drawn is None:
@@ -1154,19 +1241,16 @@ def build_yiji_distribute_prompt(view: dict, drawn: list[str] = None) -> str:
         f"{c['name']}({c['suit']})" for c in view["my_hand"]
     ) if view["my_hand"] else "无"
     equipment = ", ".join(view["my_equipment"]) if view["my_equipment"] else "无"
-    target_lines = []
-    for i, p in enumerate(view["players"]):
-        if i == view["player_idx"] or not p["alive"]: continue
-        eq_str = f" 装备:{','.join(p['equipment'])}" if p.get("equipment") else ""
-        target_lines.append(f"  [{i}] {p['name']}({p['kingdom']}) HP:{p['hp']}/{p['max_hp']} 身份:{p.get('role','未知')} 手牌数:{p.get('hand_count',0)}{eq_str}")
-    target_info = "\n".join(target_lines)
     return YIJI_DISTRIBUTE_PROMPT.format(
         yiji_cards=yiji_cards,
         hero_name=view["my_hero"], kingdom=view["my_kingdom"],
         hp=view["my_hp"], max_hp=view["my_max_hp"],
-        hand_count=len(view["my_hand"]), hand_cards=hand_cards,
         equipment=equipment, my_role=view.get("my_role","未知"),
-        target_info=target_info,
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
 
 
@@ -1187,6 +1271,9 @@ def build_jiedao_choice_prompt(view: dict, source_idx: int, secondary_idx: int) 
         hand_count=len(view["my_hand"]), hand_cards=hand_cards,
         equipment=equipment, public_info=public_info,
             recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
     """Build prompt for 遗计 card distribution."""
     hand_cards = ", ".join(
@@ -1221,7 +1308,9 @@ def build_jiedao_choice_prompt(view: dict, source_idx: int, secondary_idx: int) 
 
 GUANXING_PROMPT = """## 观星排列
 
-你发动了【观星】，查看了牌堆顶的牌。请决定哪些放回牌堆顶（先放的在下面），哪些放牌堆底。
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
+
+你发动了【观星】，查看了牌堆顶{count}张牌。请决定每张牌放回牌堆顶（你下回合摸到）或牌堆底。
 
 亮出的牌：
 {guanxing_cards}
@@ -1230,7 +1319,19 @@ GUANXING_PROMPT = """## 观星排列
 - 武将：{hero_name}（{kingdom}）
 - 体力：{hp}/{max_hp}
 - 手牌（{hand_count}张）：{hand_cards}
+- 装备：{equipment}
 - 身份：{my_role}
+
+### 场上信息
+{public_info}
+
+### 近期事件
+{recent_events}
+
+### 策略提示
+- 放牌堆顶的牌将由你及后续角色依次摸到，放牌堆底的牌最后才会摸到
+- 后续角色若有乐不思蜀或闪电，其判定牌来自牌堆顶，可据此控制结果
+- 你可以完全打乱这{count}张牌的顺序，决定哪些牌以什么顺序放牌堆顶、哪些以什么顺序放牌堆底
 
 请输出JSON，每张牌标记 top 或 bottom：
 ```json
@@ -1242,6 +1343,8 @@ GUANXING_PROMPT = """## 观星排列
 
 
 DRAW_PHASE_PROMPT = """## 摸牌阶段决策
+
+当前是第{round_number}轮，{active_player_name}的回合，{phase_name}阶段
 
 当前是你的摸牌阶段。你可以选择：
 {skill_options}
@@ -1314,6 +1417,9 @@ def build_draw_phase_prompt(view: dict) -> str:
         hand_cards=hand_cards,
         equipment=equipment,
         target_info=target_info,
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
     hand_cards = ", ".join(
         f"{c['name']}({c['suit']})" for c in view["my_hand"]
@@ -1325,6 +1431,9 @@ def build_draw_phase_prompt(view: dict) -> str:
         hp=view["my_hp"], max_hp=view["my_max_hp"],
         hand_count=len(view["my_hand"]), hand_cards=hand_cards,
         my_role=view.get("my_role", "未知"),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
     return GUANXING_PROMPT.format(
         guanxing_cards=cards_str,
@@ -1395,8 +1504,10 @@ def build_draw_phase_prompt(view: dict) -> str:
         hand_count=len(view["my_hand"]),
         hand_cards=hand_cards,
         equipment=equipment,
+        my_role=view.get("my_role", "未知"),
+        public_info=public_info,
+        recent_events=_format_recent_events(view),
     )
-    """Build prompt for 刚烈 choice."""
     source_name = view["players"][source_idx]["name"]
     hand_cards = ", ".join(
         f"{c['name']}({c['suit']})" for c in view["my_hand"]
@@ -1421,32 +1532,183 @@ def build_draw_phase_prompt(view: dict) -> str:
     )
 
 
-GUANXING_PROMPT = """## 观星排列
-你发动了【观星】，查看了牌堆顶的牌。请决定哪些放回牌堆顶，哪些放牌堆底。
-亮出的牌：
-{guanxing_cards}
+CXT_OPTION_PROMPT = """## 雌雄双股剑
+
+{source_name}对你使用了【杀】（装备雌雄双股剑，异性特效触发）。
+
+你需要选择：
+- **discard**：弃置1张手牌
+- **draw**：让{source_name}摸1张牌
+
 ### 你的状态
 - 武将：{hero_name}（{kingdom}）
 - 体力：{hp}/{max_hp}
 - 手牌（{hand_count}张）：{hand_cards}
+- 装备：{equipment}
 - 身份：{my_role}
-请输出JSON，每张牌标记 top 或 bottom：
+
+### 场上信息
+{public_info}
+
+### 近期事件
+{recent_events}
+
+请输出JSON决定：
 ```json
-{{"reasoning": "排列理由", "arrange": ["牌名:top", "牌名:bottom", ...]}}
+{{"reasoning": "选择的理由", "choice": "discard|draw"}}
 ```"""
 
 
-def build_guanxing_prompt(view: dict, cards: list[str]) -> str:
+WEAPON_PROMPT = """## {weapon_title}
+
+{weapon_desc}
+
+### 你的状态
+- 武将：{hero_name}（{kingdom}）
+- 体力：{hp}/{max_hp}
+- 手牌（{hand_count}张）：{hand_cards}
+- 装备：{equipment}
+- 身份：{my_role}
+
+### 场上信息
+{public_info}
+
+### 近期事件
+{recent_events}
+
+{weapon_hint}请输出JSON：
+{weapon_json}
+```"""
+
+
+def build_cxt_option_prompt(view: dict, source_idx: int) -> str:
+    """Build prompt for 雌雄双股剑 choice."""
+    source_name = view["players"][source_idx]["name"]
+    hand_cards = ", ".join(f"{c['name']}({c['suit']})" for c in view["my_hand"]) if view["my_hand"] else "无"
+    equipment = ", ".join(view["my_equipment"]) if view["my_equipment"] else "无"
+    return CXT_OPTION_PROMPT.format(
+        source_name=source_name,
+        hero_name=view["my_hero"], kingdom=view["my_kingdom"],
+        hp=view["my_hp"], max_hp=view["my_max_hp"],
+        hand_count=len(view["my_hand"]), hand_cards=hand_cards,
+        equipment=equipment, my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+    )
+
+
+def build_weapon_prompt(view: dict, weapon: str, target_idx: int, **extra) -> str:
+    target_name = view["players"][target_idx]["name"] if target_idx < len(view["players"]) else "?"
+    hand_cards = ", ".join(f"{c['name']}({c['suit']})" for c in view["my_hand"]) if view["my_hand"] else "无"
+    equipment = ", ".join(view["my_equipment"]) if view["my_equipment"] else "无"
+
+    if weapon == "guanshi_axe":
+        title = "贯石斧"
+        desc = f"你的【杀】被{target_name}闪避，你可以弃2张牌（手牌/装备均可）强制命中。"
+        hint = ""
+        json_str = '{"reasoning":"...", "use": true/false, "cards_used": ["牌名1", "牌名2"]}'
+    elif weapon == "qinglong_blade":
+        title = "青龙偃月刀"
+        desc = f"你的【杀】被{target_name}闪避，你可以追加一张【杀】（武圣可用红牌、龙胆可用闪当杀）。"
+        hint = ""
+        json_str = '{"reasoning":"...", "use": true/false}'
+    elif weapon == "hanbing_sword":
+        title = "寒冰剑"
+        desc = f"即将对{target_name}造成伤害，你可以弃2张牌，改为弃置{target_name}的2张牌（不造成伤害）。"
+        hint = ""
+        json_str = '{"reasoning":"...", "use": true/false, "cards_used": ["牌名1", "牌名2"]}'
+    elif weapon == "qilin_bow":
+        mounts = extra.get("mounts", [])
+        if len(mounts) == 1:
+            desc = f"对{target_name}造成伤害后，你可以弃置其坐骑【{mounts[0]}】。"
+            json_str = '{"reasoning":"...", "use": true/false}'
+        else:
+            desc = f"对{target_name}造成伤害后，你可以弃置其一匹马: {', '.join(mounts)}。"
+            json_str = '{"reasoning":"...", "use": true/false, "card_name": "马名"}'
+        title = "麒麟弓"
+        hint = ""
+
+    return WEAPON_PROMPT.format(
+        weapon_title=title, weapon_desc=desc, weapon_hint=hint, weapon_json=json_str,
+        hero_name=view["my_hero"], kingdom=view["my_kingdom"],
+        hp=view["my_hp"], max_hp=view["my_max_hp"],
+        hand_count=len(view["my_hand"]), hand_cards=hand_cards,
+        equipment=equipment, my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+    )
+
+
+FANKUI_PROMPT = """## 反馈抉择
+
+你受到伤害后可以发动【反馈】，从伤害来源获得一张牌。
+
+伤害来源：{source_name}（手牌{source_hand}张，装备{source_equip}）
+
+### 你的状态
+- 武将：{hero_name}（{kingdom}）
+- 体力：{hp}/{max_hp}
+- 手牌（{hand_count}张）：{hand_cards}
+- 装备：{equipment}
+- 身份：{my_role}
+
+### 场上信息
+{public_info}
+
+### 近期事件
+{recent_events}
+
+### 策略提示
+- trigger=获得手牌 / equipment=获得装备 / skip=不发动
+
+请输出JSON：
+```json
+{{"reasoning": "...", "choice": "trigger|equipment|skip"}}
+```"""
+
+
+def build_fankui_prompt(view: dict, source_idx: int) -> str:
+    source = view["players"][source_idx]
+    source_name = source["name"]
+    source_hand = source.get("hand_count", 0)
+    source_equip = ",".join(source.get("equipment", [])) or "无"
+    hand_cards = ", ".join(f"{c['name']}({c['suit']})" for c in view["my_hand"]) if view["my_hand"] else "无"
+    equipment = ", ".join(view["my_equipment"]) if view["my_equipment"] else "无"
+    return FANKUI_PROMPT.format(
+        source_name=source_name, source_hand=source_hand, source_equip=source_equip,
+        hero_name=view["my_hero"], kingdom=view["my_kingdom"],
+        hp=view["my_hp"], max_hp=view["my_max_hp"],
+        hand_count=len(view["my_hand"]), hand_cards=hand_cards,
+        equipment=equipment, my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+    )
+    source_name = view["players"][source_idx]["name"]
+    hand_cards = ", ".join(f"{c['name']}({c['suit']})" for c in view["my_hand"]) if view["my_hand"] else "无"
+    equipment = ", ".join(view["my_equipment"]) if view["my_equipment"] else "无"
+    return CXT_OPTION_PROMPT.format(
+        source_name=source_name,
+        hero_name=view["my_hero"], kingdom=view["my_kingdom"],
+        hp=view["my_hp"], max_hp=view["my_max_hp"],
+        hand_count=len(view["my_hand"]), hand_cards=hand_cards,
+        equipment=equipment, my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
+    )
     hand_cards = ", ".join(
         f"{c['name']}({c['suit']})" for c in view["my_hand"]
     ) if view["my_hand"] else "无"
+    equipment = ", ".join(view["my_equipment"]) if view.get("my_equipment") else "无"
     cards_str = "\n".join(f"  [{j}] {c}" for j, c in enumerate(cards))
     return GUANXING_PROMPT.format(
+        count=len(cards),
         guanxing_cards=cards_str,
         hero_name=view["my_hero"], kingdom=view["my_kingdom"],
         hp=view["my_hp"], max_hp=view["my_max_hp"],
         hand_count=len(view["my_hand"]), hand_cards=hand_cards,
-        my_role=view.get("my_role", "未知"),
+        equipment=equipment, my_role=view.get("my_role", "未知"),
+        public_info=_format_public_info(view),
+        recent_events=_format_recent_events(view),
     )
 
 
@@ -1476,6 +1738,9 @@ def build_guicai_prompt(view: dict, judgment_card_name: str, judgment_suit: str,
         equipment=equipment,
         public_info=public_info,
             recent_events=_format_recent_events(view),
+        round_number=view.get("round_number", 1),
+        active_player_name=view["players"][view["active_player"]]["name"],
+        phase_name=view.get("phase", "出牌"),
     )
     """Build hero selection prompt."""
     lines = []

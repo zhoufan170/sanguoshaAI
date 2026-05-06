@@ -76,7 +76,7 @@ class GameState:
     discard_pile: list[Card]
     log: list[GameEvent]
     turn_number: int = 0
-    round_number: int = 0
+    round_number: int = 1
     sha_used_this_turn: dict[int, int] = field(default_factory=dict)
     sha_limit: dict[int, int] = field(default_factory=dict)
     skills_used_this_turn: dict[int, set] = field(default_factory=dict)
@@ -449,36 +449,57 @@ def _resolve_card(state: GameState, action: Action, card: Card,
         else:
             dodged = False
 
-        # 贯石斧: 被闪后可弃2张牌强制命中
-        if dodged and any(eq.name == "贯石斧" for eq in player.equipment) and len(player.hand) >= 2:
+        # 贯石斧: 被闪后可弃2张牌（手牌/装备均可）强制命中
+        total_cards = len(player.hand) + len(player.equipment)
+        if dodged and any(eq.name == "贯石斧" for eq in player.equipment) and total_cards >= 2:
             if agent_callback:
                 v = get_player_view(state, action.player_idx)
                 resp = agent_callback(v, "guanshi_axe", target_idx=action.target_idx)
                 if resp and resp.type == ActionType.RESPOND:
+                    discarded = 0
                     for cn in resp.cards_used[:2]:
                         c2 = next((x for x in player.hand if x.name == cn), None)
-                        if c2: player.hand.remove(c2); state.discard_pile.append(c2)
-                    events.append(GameEvent(f"{player.name}发动【贯石斧】，弃2张牌强制命中"))
-                    dodged = False
-            elif len(player.hand) >= 2:
-                # Random: 50% chance to force hit
+                        if c2 is None:
+                            c2 = next((x for x in player.equipment if x.name == cn), None)
+                        if c2:
+                            if c2 in player.equipment: player.equipment.remove(c2)
+                            else: player.hand.remove(c2)
+                            state.discard_pile.append(c2)
+                            discarded += 1
+                    if discarded >= 2:
+                        events.append(GameEvent(f"{player.name}发动【贯石斧】，弃2张牌强制命中"))
+                        dodged = False
+            else:
                 import random
                 if random.random() < 0.5:
-                    picked = player.hand[:2]
-                    for c2 in picked: player.hand.remove(c2); state.discard_pile.append(c2)
+                    all_cards = player.hand + player.equipment
+                    picked = all_cards[:2]
+                    for c2 in picked:
+                        if c2 in player.equipment: player.equipment.remove(c2)
+                        else: player.hand.remove(c2)
+                        state.discard_pile.append(c2)
                     events.append(GameEvent(f"{player.name}发动【贯石斧】，弃2张牌强制命中"))
                     dodged = False
 
-        # 青龙偃月刀: 被闪后可再出一张杀
+        # 青龙偃月刀: 被闪后可再出一张杀（含武圣红牌/龙胆闪）
         if dodged and any(eq.name == "青龙偃月刀" for eq in player.equipment):
             extra_sha = next((c for c in player.hand if c.name == "杀"), None)
+            if extra_sha is None and has_skill(player, "武圣"):
+                extra_sha = next((c for c in player.hand if c.suit.value in ("♥", "♦")), None)
+            if extra_sha is None and has_skill(player, "龙胆"):
+                extra_sha = next((c for c in player.hand if c.name == "闪"), None)
             if extra_sha:
                 if agent_callback:
                     v = get_player_view(state, action.player_idx)
                     resp = agent_callback(v, "qinglong_blade", target_idx=action.target_idx)
                     if resp and resp.type == ActionType.RESPOND:
                         player.hand.remove(extra_sha); state.discard_pile.append(extra_sha)
-                        events.append(GameEvent(f"{player.name}发动【青龙偃月刀】，追加一张【杀】"))
+                        if extra_sha.name == "闪" and has_skill(player, "龙胆"):
+                            events.append(GameEvent(f"{player.name}发动【青龙偃月刀】+【龙胆】，将【闪】当【杀】追加"))
+                        elif extra_sha.name != "杀" and has_skill(player, "武圣"):
+                            events.append(GameEvent(f"{player.name}发动【青龙偃月刀】+【武圣】，将【{extra_sha.name}】当【杀】追加"))
+                        else:
+                            events.append(GameEvent(f"{player.name}发动【青龙偃月刀】，追加一张【杀】"))
                         # Resolve the extra 杀 (simple: ask target again)
                         if agent_callback:
                             dodged2 = request_response(state, action.target_idx, "闪", "杀", action.player_idx, agent_callback, events)
@@ -490,7 +511,12 @@ def _resolve_card(state: GameState, action: Action, card: Card,
                         dodged = False
                 else:
                     player.hand.remove(extra_sha); state.discard_pile.append(extra_sha)
-                    events.append(GameEvent(f"{player.name}发动【青龙偃月刀】，追加一张【杀】"))
+                    if extra_sha.name == "闪":
+                        events.append(GameEvent(f"{player.name}发动【青龙偃月刀】+【龙胆】，追加【杀】"))
+                    elif extra_sha.name != "杀":
+                        events.append(GameEvent(f"{player.name}发动【青龙偃月刀】+【武圣】，将【{extra_sha.name}】当【杀】追加"))
+                    else:
+                        events.append(GameEvent(f"{player.name}发动【青龙偃月刀】，追加一张【杀】"))
                     dodged2 = auto_dodge_check(state, action.target_idx)
                     if not dodged2:
                         bonus = 1 if hasattr(state, '_nuoyi_bonus') and state._nuoyi_bonus == action.player_idx else 0
@@ -518,12 +544,25 @@ def _resolve_card(state: GameState, action: Action, card: Card,
                     return events
             # Deal damage normally
             events.extend(deal_damage(state, action.player_idx, action.target_idx, 1 + bonus, agent_callback, source_card=card))
-            # 麒麟弓: 造成伤害后弃目标一匹马
+            # 麒麟弓: 造成伤害后可弃目标一匹马（LLM决定是否+选哪匹）
             if any(eq.name == "麒麟弓" for eq in player.equipment):
                 mounts = [c for c in target.equipment if c.name in ("的卢","绝影","爪黄飞电","赤兔","大宛","紫骍")]
                 if mounts:
-                    m = mounts[0]; remove_equipment(state, action.target_idx, m, events)
-                    events.append(GameEvent(f"{player.name}发动【麒麟弓】，弃置了{target.name}的【{m.name}】"))
+                    if agent_callback:
+                        v = get_player_view(state, action.player_idx)
+                        mount_names = [m.name for m in mounts]
+                        resp = agent_callback(v, "qilin_bow", target_idx=action.target_idx,
+                                              mounts=mount_names)
+                        if resp and resp.type == ActionType.RESPOND and resp.card_name:
+                            m = next((x for x in mounts if x.name == resp.card_name), None)
+                            if m is None:
+                                m = mounts[0]
+                            remove_equipment(state, action.target_idx, m, events)
+                            events.append(GameEvent(f"{player.name}发动【麒麟弓】，弃置了{target.name}的【{m.name}】"))
+                    else:
+                        m = mounts[0]
+                        remove_equipment(state, action.target_idx, m, events)
+                        events.append(GameEvent(f"{player.name}发动【麒麟弓】，弃置了{target.name}的【{m.name}】"))
 
     elif effective == "桃":
         # 出牌阶段只能自回，濒死救援走 _resolve_dying 独立流程
@@ -1384,6 +1423,10 @@ def random_agent(view: dict, phase: str, **kwargs) -> Action | None:
             return _act(type=ActionType.RESPOND,
                         cards_used=[c["name"] for c in view["my_hand"][:2]])
         return None
+
+    if phase == "qilin_bow":
+        # 麒麟弓: always trigger
+        return _act(type=ActionType.RESPOND)
 
     if phase == "wugu_pick":
         revealed = kwargs.get("revealed", [])

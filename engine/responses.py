@@ -220,6 +220,9 @@ def resolve_negate_chain(state, action: Action, card: Card,
     negate_source_idx = action.player_idx
     negate_card_name = card.name
     negate_target_idx = action.target_idx
+    original_card = card.name
+    orig_source_name = state.players[action.player_idx].name
+    orig_target_name = state.players[action.target_idx].name if action.target_idx is not None else "全部"
 
     from engine.game import get_player_view
 
@@ -239,7 +242,11 @@ def resolve_negate_chain(state, action: Action, card: Card,
             response = agent_callback(view, "negate",
                                       source_idx=negate_source_idx,
                                       card_name=negate_card_name,
-                                      target_idx=negate_target_idx)
+                                      target_idx=negate_target_idx,
+                                      original_card=original_card,
+                                      chain_count=chain_count,
+                                      orig_source_name=orig_source_name,
+                                      orig_target_name=orig_target_name)
             if response and response.type == ActionType.RESPOND and response.card_name == "无懈可击":
                 wx_card = next((c for c in player.hand if c.name == "无懈可击"), None)
                 if wx_card:

@@ -197,6 +197,11 @@ class StepController:
             ti = kwargs.get("target_idx", 0)
             tgt = view["players"][ti]["name"] if ti < len(view["players"]) else "?"
             return f"【寒冰剑】— {player_name}弃2张牌改为弃{tgt}的牌？"
+        elif phase == "qilin_bow":
+            ti = kwargs.get("target_idx", 0)
+            tgt = view["players"][ti]["name"] if ti < len(view["players"]) else "?"
+            mt = kwargs.get("mounts", [])
+            return f"【麒麟弓】— {player_name}是否弃置{tgt}的{'/'.join(mt)}？"
         elif phase == "guanxing":
             cards = kwargs.get("cards", [])
             return f"【观星】— {player_name}排列牌堆顶: {', '.join(cards)}"

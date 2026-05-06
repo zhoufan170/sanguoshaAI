@@ -7,6 +7,7 @@ from engine.heroes import Hero, Role, Kingdom
 from engine.rules import (
     Action, ActionType, GameEvent, deal_damage, has_skill,
     remove_from_hand, check_lianying,
+    _resolve_dying, _resolve_death,
 )
 from engine.responses import request_response
 
@@ -25,6 +26,16 @@ def resolve_skill(state, action: Action, agent_callback: Any = None) -> list[Gam
                 player.hand.remove(c)
                 state.discard_pile.append(c)
         player.hp -= 1
+        # 苦肉可能导致自己濒死
+        if player.hp <= 0 and player.alive:
+            saved = False
+            while player.hp <= 0 and player.alive:
+                saved = _resolve_dying(state, action.player_idx, events, agent_callback)
+                if not saved:
+                    _resolve_death(state, action.player_idx, action.player_idx, events)
+                    break
+        if not player.alive:
+            return events
         drawn = state._draw(action.player_idx, 2)
         c_str = " ".join(str(c) for c in drawn)
         events.append(GameEvent(f"{player.name}苦肉：弃1张牌，失去1点体力，摸: {c_str}"))
@@ -33,8 +44,13 @@ def resolve_skill(state, action: Action, agent_callback: Any = None) -> list[Gam
         discarded = 0
         for cn in action.cards_used:
             c = next((x for x in player.hand if x.name == cn), None)
+            if c is None:
+                c = next((x for x in player.equipment if x.name == cn), None)
             if c:
-                player.hand.remove(c)
+                if c in player.equipment:
+                    player.equipment.remove(c)
+                else:
+                    player.hand.remove(c)
                 state.discard_pile.append(c)
                 discarded += 1
         if discarded > 0:
@@ -141,33 +157,42 @@ def resolve_skill(state, action: Action, agent_callback: Any = None) -> list[Gam
             events.append(GameEvent(f"{player.name}发动【结姻】，与{target.name}各回复1点体力"))
 
     elif action.skill_name == "反间":
-        if action.cards_used and action.target_idx is not None:
-            cn = action.cards_used[0]
-            c = next((x for x in player.hand if x.name == cn), None)
-            if c:
-                player.hand.remove(c)
-                target = state.players[action.target_idx]
-                actual_suit = c.suit.value
-                # Target guesses suit (before receiving the card)
-                guessed = action.extra.get("guessed_suit") if action.extra else None
-                if agent_callback and not guessed:
-                    from engine.game import get_player_view
-                    view = get_player_view(state, action.target_idx)
-                    resp = agent_callback(view, "fanjian_guess",
-                                          source_idx=action.player_idx,
-                                          card_name=cn)
-                    if resp:
-                        guessed = resp.card_name
-                if not guessed:
-                    import random as _rnd
-                    suits = ["♠", "♥", "♣", "♦"]
-                    guessed = _rnd.choice(suits)
+        if action.target_idx is not None and player.hand:
+            target = state.players[action.target_idx]
+            # 1. Target guesses suit first (before knowing which card)
+            guessed = action.extra.get("guessed_suit") if action.extra else None
+            if agent_callback and not guessed:
+                from engine.game import get_player_view
+                view = get_player_view(state, action.target_idx)
+                resp = agent_callback(view, "fanjian_guess",
+                                      source_idx=action.player_idx)
+                if resp:
+                    guessed = resp.card_name
+            if not guessed:
+                import random as _rnd
+                suits = ["♠", "♥", "♣", "♦"]
+                guessed = _rnd.choice(suits)
+            # 2. Randomly pick a card from 周瑜's hand
+            import random as _rnd2
+            c = _rnd2.choice(player.hand)
+            player.hand.remove(c)
+            actual_suit = c.suit.value
+            state.add_event(f"{player.name}反间：{target.name}猜花色{guessed}（实际{actual_suit}）",
+                            actor=action.player_idx)
+            if guessed != actual_suit:
+                # 3. Damage first (triggers dying/求桃)
+                dmgs = deal_damage(state, action.player_idx, action.target_idx, 1, agent_callback)
+                events.extend(dmgs)
+                # 4. If target died, card goes to discard
+                if not target.alive:
+                    state.discard_pile.append(c)
+                    events.append(GameEvent(f"{target.name}死亡，反间牌【{c.name}】弃置"))
+                else:
+                    target.hand.append(c)
+                    events.append(GameEvent(f"{target.name}获得【{c.name}】"))
+            else:
                 target.hand.append(c)
-                msg = f"{player.name}反间：{target.name}猜花色{guessed}（实际{actual_suit}），获得【{c.name}】"
-                events.append(GameEvent(msg))
-                state.add_event(msg, actor=action.player_idx)
-                if guessed != actual_suit:
-                    events.extend(deal_damage(state, action.player_idx, action.target_idx, 1, agent_callback))
+                events.append(GameEvent(f"{target.name}猜对花色，获得【{c.name}】"))
 
     elif action.skill_name == "裸衣":
         state.sha_limit[action.player_idx] = 1

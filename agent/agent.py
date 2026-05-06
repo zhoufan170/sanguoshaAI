@@ -20,6 +20,9 @@ from agent.prompts import (
     build_yiji_distribute_prompt,
     build_jiedao_choice_prompt,
     build_guanxing_prompt,
+    build_cxt_option_prompt,
+    build_weapon_prompt,
+    build_fankui_prompt,
 )
 
 
@@ -134,6 +137,12 @@ class Agent:
             return self._handle_guanxing(view, kwargs)
         elif phase == "fankui":
             return self._handle_fankui(view, kwargs)
+        elif phase == "qilin_bow":
+            return self._handle_qilin_bow(view, kwargs)
+        elif phase == "cxt_option":
+            return self._handle_cxt_option(view, kwargs)
+        elif phase in ("guanshi_axe", "qinglong_blade", "hanbing_sword"):
+            return self._handle_weapon_choice(view, phase, kwargs)
         else:
             return None
 
@@ -191,6 +200,10 @@ class Agent:
             source_idx=source_idx,
             card_name=card_name,
             target_idx=target_idx,
+            original_card=kwargs.get("original_card"),
+            chain_count=kwargs.get("chain_count", 0),
+            orig_source_name=kwargs.get("orig_source_name", ""),
+            orig_target_name=kwargs.get("orig_target_name", ""),
         )
 
         return self._chat_and_parse(prompt, temperature=0.5, max_tokens=1024)
@@ -389,6 +402,73 @@ class Agent:
             reasoning=reasoning,
         )
 
+    def _handle_cxt_option(self, view: dict, kwargs: dict) -> Action | None:
+        """Handle 雌雄双股剑: target chooses discard or let attacker draw."""
+        source_idx = kwargs.get("source_idx", 0)
+        has_hand = len(view.get("my_hand", [])) > 0
+
+        prompt = build_cxt_option_prompt(view, source_idx=source_idx)
+
+        response = self._chat_json(prompt, temperature=0.3, max_tokens=512)
+        if not response.parsed_json:
+            return Action(type=ActionType.RESPOND, player_idx=view["player_idx"], skill_name="discard" if has_hand else "draw")
+
+        choice = response.parsed_json.get("choice", "discard")
+        reasoning = response.parsed_json.get("reasoning", "")
+        if choice == "draw":
+            return Action(type=ActionType.RESPOND, player_idx=view["player_idx"], skill_name="draw", reasoning=reasoning)
+        return Action(type=ActionType.RESPOND, player_idx=view["player_idx"], skill_name="discard", reasoning=reasoning)
+
+    def _handle_qilin_bow(self, view: dict, kwargs: dict) -> Action | None:
+        """Handle 麒麟弓: choose whether to discard target's mount and which one."""
+        target_idx = kwargs.get("target_idx", 0)
+        mounts = kwargs.get("mounts", [])
+        if not mounts:
+            return None
+
+        prompt = build_weapon_prompt(view, "qilin_bow", target_idx, mounts=mounts)
+        response = self._chat_json(prompt, temperature=0.3, max_tokens=512)
+        if not response.parsed_json:
+            return None
+
+        use = response.parsed_json.get("use", False)
+        if not use:
+            return None
+
+        card_name = response.parsed_json.get("card_name", mounts[0] if mounts else "")
+        return Action(type=ActionType.RESPOND, player_idx=view["player_idx"],
+                      card_name=card_name, reasoning=response.parsed_json.get("reasoning", ""))
+
+    def _handle_weapon_choice(self, view: dict, phase: str, kwargs: dict) -> Action | None:
+        """Handle weapon effect decisions (贯石斧/青龙刀/寒冰剑)."""
+        target_idx = kwargs.get("target_idx", 0)
+        hand = view.get("my_hand", [])
+
+        # Pre-check for 青龙刀: needs a usable 杀
+        if phase == "qinglong_blade":
+            has_sha = any(c["name"] == "杀" for c in hand)
+            if not has_sha:
+                skills = view.get("my_skills", [])
+                if "武圣" in skills:
+                    has_sha = any(c["suit"] in ("♥", "♦") for c in hand)
+                if not has_sha and "龙胆" in skills:
+                    has_sha = any(c["name"] == "闪" for c in hand)
+            if not has_sha:
+                return None
+
+        prompt = build_weapon_prompt(view, phase, target_idx)
+        response = self._chat_json(prompt, temperature=0.3, max_tokens=512)
+        if not response.parsed_json:
+            return None
+
+        use = response.parsed_json.get("use", False)
+        if not use:
+            return None
+
+        cards = response.parsed_json.get("cards_used", [])
+        return Action(type=ActionType.RESPOND, player_idx=view["player_idx"],
+                      cards_used=cards[:2], reasoning=response.parsed_json.get("reasoning", ""))
+
     def _handle_fankui(self, view: dict, kwargs: dict) -> Action | None:
         """Handle 反馈: choose trigger or skip."""
         source_idx = kwargs.get("source_idx", 0)
@@ -398,14 +478,8 @@ class Agent:
         if not has_hand and not has_equip:
             return Action(type=ActionType.RESPOND, player_idx=view["player_idx"], skill_name="skip")
 
-        prompt = f"""## 反馈抉择
-你受到伤害后可以发动【反馈】，从伤害来源获得一张牌。
-伤害来源: {source.get('name', '?')} (手牌:{source.get('hand_count', 0)}张 装备:{','.join(source.get('equipment', []))})
-你的身份: {view.get('my_role', '未知')}
-选择: trigger=获得手牌 / equipment=获得装备 / skip=不发动
-输出JSON: {{"reasoning": "...", "choice": "trigger|equipment|skip"}}"""
-
-        response = self._chat_json(prompt, temperature=0.3, max_tokens=256)
+        prompt = build_fankui_prompt(view, source_idx=source_idx)
+        response = self._chat_json(prompt, temperature=0.3, max_tokens=512)
         if not response.parsed_json:
             return Action(type=ActionType.RESPOND, player_idx=view["player_idx"], skill_name="trigger")
 
