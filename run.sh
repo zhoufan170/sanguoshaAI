@@ -20,4 +20,4 @@ elif [ -z "$ANTHROPIC_API_KEY" ]; then
     export ANTHROPIC_API_KEY="your-api-key-here"
 fi
 
-python3 sanguosha/main.py "${ARGS[@]}"
+python3 main.py "${ARGS[@]}"
