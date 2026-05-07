@@ -1062,6 +1062,7 @@ def build_ganglie_choice_prompt(view: dict, source_idx: int) -> str:
         hand_count=len(view["my_hand"]),
         hand_cards=hand_cards,
         equipment=equipment,
+        my_role=view.get('my_role', '未知'),
         public_info=public_info,
             recent_events=_format_recent_events(view),
         round_number=view.get("round_number", 1),
@@ -1527,6 +1528,7 @@ def build_draw_phase_prompt(view: dict) -> str:
         hand_count=hand_count,
         hand_cards=hand_cards,
         equipment=equipment,
+        my_role=view.get('my_role', '未知'),
         public_info=public_info,
             recent_events=_format_recent_events(view),
     )
