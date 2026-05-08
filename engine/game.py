@@ -254,14 +254,21 @@ def execute_action(state: GameState, action: Action,
             return events
 
         if from_equip:
-            player.equipment.remove(card)
-            state.discard_pile.append(card)
-            # Reset 诸葛连弩 if removed
-            if card.name == "诸葛连弩" and not has_skill(player, "咆哮"):
-                state.sha_limit[action.player_idx] = 1
+            if card in player.equipment:
+                player.equipment.remove(card)
+                state.discard_pile.append(card)
+                if card.name == "诸葛连弩" and not has_skill(player, "咆哮"):
+                    state.sha_limit[action.player_idx] = 1
+            elif card in player.hand:
+                player.hand.remove(card)
+                state.discard_pile.append(card)
         else:
-            player.hand.remove(card)
-            state.discard_pile.append(card)
+            if card in player.hand:
+                player.hand.remove(card)
+                state.discard_pile.append(card)
+            elif card in player.equipment:
+                player.equipment.remove(card)
+                state.discard_pile.append(card)
         # Only show skill conversion for actual card-conversion skills
         conversion_skills = {"武圣", "奇袭", "国色", "龙胆", "丈八蛇矛"}
         if skill_name in conversion_skills:
@@ -897,6 +904,15 @@ class SanguoshaGame:
 
     def run_turn(self) -> bool:
         state = self.state; player = state.players[state.active_player]
+        if not player.alive: self._next_player(); return True
+        # 兜底：HP≤0的角色应进入濒死
+        if player.alive and player.hp <= 0:
+            from engine.rules import _resolve_dying, _resolve_death
+            while player.hp <= 0 and player.alive:
+                saved = _resolve_dying(state, state.active_player, [], self.agent_callback)
+                if not saved:
+                    _resolve_death(state, state.active_player, state.active_player, [])
+                    break
         if not player.alive: self._next_player(); return True
         self.log(f"\n{'='*60}")
         self.log(f"第{state.round_number}轮 - {player.name}的回合 (身份: {player.role.value})")
